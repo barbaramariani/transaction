@@ -2,13 +2,31 @@ package presentation_test
 
 import (
 	"bytes"
+	"log"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"transaction/application/usecases"
+	"transaction/infrastructure"
 	"transaction/presentation"
 )
 
+func setup() (rtuc usecases.RetrieveTransaction, stuc usecases.StoreTransaction) {
+	db, err := infrastructure.InitDB(":memory:")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	repo := infrastructure.NewSqliteTransactionRepository(db)
+	retrieveTransaction := usecases.RetrieveTransaction{
+		TransactionRepo: repo,
+		ExchangeService: infrastructure.NewFiscalDataTreasuryAPI("https://api.fiscaldata.treasury.gov"),
+	}
+	storeTransaction := usecases.StoreTransaction{TransactionRepo: repo}
+
+	return retrieveTransaction, storeTransaction
+}
 func TestHandleStoreTransaction_WhenPostingATransaction_CheckStatusCreatedAndResponse_Success(t *testing.T) {
 	req, err := http.NewRequest("POST", "/transactions", bytes.NewBuffer([]byte(`{"description": "test", "transaction_date": "2022-01-01", "purchase_amount_usd": 100}`)))
 	if err != nil {
@@ -16,7 +34,10 @@ func TestHandleStoreTransaction_WhenPostingATransaction_CheckStatusCreatedAndRes
 	}
 
 	rr := httptest.NewRecorder()
-	handler := http.HandlerFunc(presentation.HandleStoreTransaction)
+	_, stuc := setup()
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		presentation.HandleStoreTransaction(w, r, stuc)
+	})
 
 	handler.ServeHTTP(rr, req)
 
@@ -36,7 +57,10 @@ func TestHandleStoreTransaction_WhenPostingATransactionWithInvalidInput_CheckSta
 	}
 
 	rr := httptest.NewRecorder()
-	handler := http.HandlerFunc(presentation.HandleStoreTransaction)
+	_, stuc := setup()
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		presentation.HandleStoreTransaction(w, r, stuc)
+	})
 
 	handler.ServeHTTP(rr, req)
 
@@ -58,7 +82,10 @@ func TestHandleRetrieveTransaction_WhenTransactionDoesNotExist_CheckStatusNotFou
 	}
 
 	rr := httptest.NewRecorder()
-	handler := http.HandlerFunc(presentation.HandleRetrieveTransaction)
+	rtuc, _ := setup()
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		presentation.HandleRetrieveTransaction(w, r, rtuc)
+	})
 
 	handler.ServeHTTP(rr, req)
 

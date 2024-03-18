@@ -7,14 +7,11 @@ import (
 	"transaction/application/usecases"
 	"transaction/domain/entities"
 	"transaction/domain/validators"
-	"transaction/infrastructure"
 
 	"github.com/gorilla/mux"
 )
 
-var transactionRepo = infrastructure.NewInMemoryTransactionRepository()
-
-func HandleStoreTransaction(w http.ResponseWriter, r *http.Request) {
+func HandleStoreTransaction(w http.ResponseWriter, r *http.Request, uc usecases.StoreTransaction) {
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, "Error reading request body", http.StatusInternalServerError)
@@ -49,8 +46,7 @@ func HandleStoreTransaction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	storeTransaction := usecases.StoreTransaction{TransactionRepo: transactionRepo}
-	_, err = storeTransaction.Execute(t)
+	_, err = uc.Execute(t)
 	if err != nil {
 		http.Error(w, "Error storing transaction", http.StatusInternalServerError)
 		return
@@ -66,18 +62,13 @@ func HandleStoreTransaction(w http.ResponseWriter, r *http.Request) {
 	w.Write(jsonResponse)
 }
 
-func HandleRetrieveTransaction(w http.ResponseWriter, r *http.Request) {
-
-	retrieveTransaction := usecases.RetrieveTransaction{
-		TransactionRepo: transactionRepo,
-		ExchangeService: infrastructure.NewFiscalDataTreasuryAPI("https://api.fiscaldata.treasury.gov"),
-	}
+func HandleRetrieveTransaction(w http.ResponseWriter, r *http.Request, uc usecases.RetrieveTransaction) {
 
 	vars := mux.Vars(r)
 	id := vars["id"]
 	currency := r.URL.Query().Get("currency")
 
-	convertedTransaction, err := retrieveTransaction.Execute(id, currency)
+	convertedTransaction, err := uc.Execute(id, currency)
 	if err != nil {
 		errorMessage := "Error retrieving transaction: " + err.Error()
 		http.Error(w, errorMessage, http.StatusNotFound)
